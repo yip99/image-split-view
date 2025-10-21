@@ -1,0 +1,48 @@
+:root {
+    --bg: #0b1020;
+    --panel: #12182b;
+    --panel-2: #0f1528;
+    --border: #2b3552;
+    --accent: #6aa1ff;
+    --text: #e6ebff;
+    --muted: #9aa6c7;
+    --error: #ff6b6b;
+}
+
+html,
+body {
+    height: 100vh;
+    overflow-y: hidden;
+    margin: 0;
+}
+
+html {
+    background-color: black;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+}
+
+.dragover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 6px rgba(106, 161, 255, .12) inset, 0 0 0 1px rgba(106, 161, 255, .25);
+    background: #0f1833;
+}
+
+.image-container {
+    max-width: fit-content;
+    width: 100%;
+    /* align-content: center; */
+    resize: horizontal;
+}
+
+img {
+    /* position: absolute; */
+    /* inset: 0; */
+    /* width: 100%; */
+    /* height: 100%; */
+    max-height: 100%;
+    object-fit: contain;
+}
