@@ -37,6 +37,7 @@ export const addZoomPan = ({ container, image }) => {
     let lastTapTime = 0;
     let deviceHasTouch = false;
     let wheelTimeout;
+    let mouseDownOnImage = false;
 
     const start = {
         x: 0,
@@ -52,7 +53,6 @@ export const addZoomPan = ({ container, image }) => {
         element: image,
         scaleSensitivity: 20,
     });
-
     const onStart = (event) => {
         deviceHasTouch = true;
 
@@ -79,7 +79,6 @@ export const addZoomPan = ({ container, image }) => {
         }
 
         state = 'singleGesture';
-
         const [touch] = event.touches;
 
         start.x = touch.pageX;
@@ -162,19 +161,21 @@ export const addZoomPan = ({ container, image }) => {
         }, 100);
     };
 
+    const onMouseDown = (event) => {
+        mouseDownOnImage = true;
+    }
+
     const onMouseMove = (event) => {
         if (deviceHasTouch) return;
         if (event.buttons !== 1 /* || currentScale() === MIN_SCALE */) {
             return;
         }
+        // if (!mouseDownOnImage) return;
         event.preventDefault();
-
         if (event.movementX === 0 && event.movementY === 0) {
             return;
         }
-
         state = 'mouse';
-
         instance.panBy({ originX: event.movementX, originY: event.movementY });
     };
 
@@ -186,10 +187,11 @@ export const addZoomPan = ({ container, image }) => {
 
     const onMouseUp = (event) => {
         if (deviceHasTouch) return;
-        if (!stateIs(state, 'mouse')) {
+        if (!stateIs(state, 'mouse') && mouseDownOnImage) {
             setCurrentScale(onDoubleTap({ instance, scale: currentScale(), x: event.pageX, y: event.pageY }));
         }
         onMouseEnd();
+        mouseDownOnImage = false;
     };
 
     container.addEventListener('touchstart', onStart, { passive: false });
@@ -197,8 +199,9 @@ export const addZoomPan = ({ container, image }) => {
     container.addEventListener('touchend', onEndTouch, { passive: false });
     container.addEventListener('touchcancel', onEndTouch, { passive: false });
 
-    container.addEventListener('mousemove', onMouseMove, { passive: false });
-    container.addEventListener('mouseup', onMouseUp, { passive: false });
+    image.addEventListener('mousedown', onMouseDown, { passive: false });
+    document.body.addEventListener('mousemove', onMouseMove, { passive: false });
+    document.body.addEventListener('mouseup', onMouseUp, { passive: false });
     container.addEventListener('mouseleave', onMouseEnd, { passive: false });
     container.addEventListener('mouseout', onMouseEnd, { passive: false });
     container.addEventListener('wheel', onWheel, { passive: false });
@@ -222,8 +225,9 @@ export const addZoomPan = ({ container, image }) => {
         container.removeEventListener('touchend', onEndTouch);
         container.removeEventListener('touchcancel', onEndTouch);
 
-        container.removeEventListener('mousemove', onMouseMove);
-        container.removeEventListener('mouseup', onMouseUp);
+        image.removeEventListener('mousedown', onMouseDown);
+        document.body.removeEventListener('mousemove', onMouseMove);
+        document.body.removeEventListener('mouseup', onMouseUp);
         container.removeEventListener('mouseleave', onMouseEnd);
         container.removeEventListener('mouseout', onMouseEnd);
         container.removeEventListener('wheel', onWheel);

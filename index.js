@@ -39,11 +39,12 @@ async function appendImage(images) {
 
     for (const image of images) {
         const url = URL.createObjectURL(image);
-        const { divElement, imageContainerElement, imageElement } = createImageElement(url, image.name || 'uploaded image');
+        // const { divElement, imageContainerElement, imageElement } = createImageElement(url, image.name || 'uploaded image');
+        const imageContainerElement = createImageElement(url, image.name || 'uploaded image').cloneNode(true);
+        const imageElement = imageContainerElement.querySelector('img');
         document.querySelector('.images-container').appendChild(imageContainerElement);
-        // document.body.appendChild(imageContainerElement);
         imageElement.addEventListener('load', function () {
-            addZoomPan({ container: imageContainerElement, image: imageElement });
+            const zoompan = addZoomPan({ container: imageContainerElement, image: imageElement });
         });
     }
 }
@@ -63,7 +64,8 @@ function createImageElement(src, alt) {
     divElement.appendChild(imageContainerElement);
     imageContainerElement.appendChild(controlElement);
     imageContainerElement.appendChild(imageElement);
-    return { divElement, imageContainerElement, imageElement };
+    // return { divElement, imageContainerElement, imageElement };
+    return imageContainerElement;
 }
 
 function createControlElement() {

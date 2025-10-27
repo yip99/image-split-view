@@ -53,7 +53,7 @@ const clampedTranslate = ({ axis, translate, state }) => {
 
     // const range = Math.max(0, Math.round(imageScaledSize) - containerSize)
     const range = Math.max(0, !axisIsX && imageScaledSize < containerSize ? containerSize - Math.round(imageScaledSize) : Math.round(imageScaledSize) - containerSize)
-
+    
     const max = Math.round(range / 2)
     const min = 0 - max
     return clamp(translate, min + originOffset, max + originOffset)
@@ -218,9 +218,8 @@ export const renderer = ({
         maxScale,
         scaleSensitivity,
         accumulatedDeltaScale: 0,
-        transform: DEFAULT_TRANSFORMATION
+        transform: { ...DEFAULT_TRANSFORMATION }
     }
-
     return {
         ...canZoom(state),
         ...canPan(state),
