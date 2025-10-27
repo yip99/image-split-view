@@ -12,7 +12,7 @@
 html,
 body {
     height: 100vh;
-    overflow-y: hidden;
+    overflow: hidden;
     margin: 0;
 }
 
@@ -31,18 +31,103 @@ body {
     background: #0f1833;
 }
 
+.images-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    & * {
+        user-select: none;
+    }
+}
+
 .image-container {
     max-width: fit-content;
     width: 100%;
     /* align-content: center; */
+    height: 100%;
+    max-height: 100%;
     resize: horizontal;
+    max-width: fit-content;
+    /* height: fit-content; */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: start;
+    touch-action: manipulation;
+    flex-shrink: 0;
+    overflow-x: clip;
+    width: calc(100% / sibling-count());
+    position: relative;
+    flex: 1;
 }
 
 img {
     /* position: absolute; */
     /* inset: 0; */
-    /* width: 100%; */
+    width: 100%;
     /* height: 100%; */
     max-height: 100%;
     object-fit: contain;
+    height: fit-content;
+}
+
+.controls {
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: var(--f-controls-margin, 0 0 auto 0);
+    /* padding: var(--f-controls-padding, 8px); */
+    z-index: var(--f-controls-z-index, 20);
+    opacity: 0;
+    width: 100%;
+    /* padding: 1em; */
+    /* padding-bottom: 1em; */
+    top: 0;
+    height: calc(var(--f-button-height) * 2);
+}
+
+.controls:hover {
+    opacity: 1;
+}
+
+.controls button {
+    width: var(--f-button-width);
+    height: var(--f-button-height);
+    border: var(--f-button-border);
+    border-radius: var(--f-button-border-radius);
+    color: var(--f-button-color);
+    background: var(--f-button-bg);
+    box-shadow: var(--f-button-shadow);
+    transform: var(--f-button-transform);
+    transition: var(--f-button-transition);
+    backdrop-filter: var(--f-button-backdrop-filter);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-sizing: content-box;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    pointer-events: all;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+svg {
+    width: var(--f-button-svg-width);
+    height: var(--f-button-svg-height);
+    transform: var(--f-button-svg-transform);
+    fill: var(--f-button-svg-fill);
+    filter: var(--f-button-svg-filter);
+    opacity: var(--f-button-svg-opacity, 1);
+    transition: var(--f-button-svg-transition);
+    stroke: currentColor;
+    stroke-width: var(--f-button-svg-stroke-width);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
 }
