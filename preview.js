@@ -170,7 +170,7 @@ export const addZoomPan = ({ container, image }) => {
         if (event.buttons !== 1 /* || currentScale() === MIN_SCALE */) {
             return;
         }
-        // if (!mouseDownOnImage) return;
+        if (!mouseDownOnImage) return;
         event.preventDefault();
         if (event.movementX === 0 && event.movementY === 0) {
             return;
@@ -210,7 +210,6 @@ export const addZoomPan = ({ container, image }) => {
         state = 'idle';
         setCurrentScale(1);
         lastTapTime = 0;
-
         start.x = 0;
         start.y = 0;
         start.distance = 0;
@@ -236,5 +235,6 @@ export const addZoomPan = ({ container, image }) => {
     return {
         reset,
         destroy,
+        flip: (event) => instance.flip(event.target.value)
     };
 };

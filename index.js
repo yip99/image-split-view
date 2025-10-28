@@ -40,11 +40,14 @@ async function appendImage(images) {
     for (const image of images) {
         const url = URL.createObjectURL(image);
         // const { divElement, imageContainerElement, imageElement } = createImageElement(url, image.name || 'uploaded image');
-        const imageContainerElement = createImageElement(url, image.name || 'uploaded image').cloneNode(true);
+        const imageContainerElement = createImageElement(url, image.name || 'uploaded image');
         const imageElement = imageContainerElement.querySelector('img');
         document.querySelector('.images-container').appendChild(imageContainerElement);
         imageElement.addEventListener('load', function () {
             const zoompan = addZoomPan({ container: imageContainerElement, image: imageElement });
+            imageContainerElement.querySelector('button.reset')?.addEventListener('click', zoompan.reset);
+            imageContainerElement.querySelector('button.flip-x')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
+            imageContainerElement.querySelector('button.flip-y')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
         });
     }
 }
@@ -73,23 +76,31 @@ function createControlElement() {
     controlElement.className = 'controls';
 
     const toggle1to1Button = document.createElement('button');
+    toggle1to1Button.className = 'toggle-full';
     toggle1to1Button.appendChild(icons.zoom1to1());
-    toggle1to1Button.setAttribute('data-panzoom-action', 'toggleFull');
+    // toggle1to1Button.setAttribute('data-panzoom-action', 'toggleFull');
     const rotateCCWButton = document.createElement('button');
+    rotateCCWButton.className = 'rotate-ccw';
     rotateCCWButton.appendChild(icons.rotateCCW());
-    rotateCCWButton.setAttribute('data-panzoom-action', 'rotateCCW');
+    // rotateCCWButton.setAttribute('data-panzoom-action', 'rotateCCW');
     const rotateCWButton = document.createElement('button');
+    rotateCWButton.className = 'rotate-cw';
     rotateCWButton.appendChild(icons.rotateCW());
-    rotateCWButton.setAttribute('data-panzoom-action', 'rotateCW');
+    // rotateCWButton.setAttribute('data-panzoom-action', 'rotateCW');
     const flipXButton = document.createElement('button');
+    flipXButton.className = 'flip-x';
+    flipXButton.value = 'x';
     flipXButton.appendChild(icons.flipX());
-    flipXButton.setAttribute('data-panzoom-action', 'flipX');
+    // flipXButton.setAttribute('data-panzoom-action', 'flipX');
     const flipYButton = document.createElement('button');
+    flipYButton.className = 'flip-y';
+    flipYButton.value = 'y';
     flipYButton.appendChild(icons.flipY());
-    flipYButton.setAttribute('data-panzoom-action', 'flipY');
+    // flipYButton.setAttribute('data-panzoom-action', 'flipY');
     const resetButton = document.createElement('button');
+    resetButton.className = 'reset';
     resetButton.appendChild(icons.reset());
-    resetButton.setAttribute('data-panzoom-action', 'reset');
+    // resetButton.setAttribute('data-panzoom-action', 'reset');
 
     controlElement.append(toggle1to1Button, rotateCCWButton, rotateCWButton, flipXButton, flipYButton, resetButton);
     return controlElement;

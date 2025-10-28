@@ -43,7 +43,16 @@ body {
     }
 }
 
+.image-container::-webkit-scrollbar {
+    display: none;
+    /* Older Safari and Chromium */
+}
+
 .image-container {
+    -ms-overflow-style: none;
+    /* Internet Explorer 10+ */
+    scrollbar-width: none;
+    /* Firefox, Safari 18.2+, Chromium 121+ */
     max-width: fit-content;
     width: 100%;
     /* align-content: center; */
@@ -59,9 +68,9 @@ body {
     touch-action: manipulation;
     flex-shrink: 0;
     overflow-x: clip;
-    width: calc(100% / sibling-count());
+    /* width: calc(100% / sibling-count()); */
     position: relative;
-    /* flex: 1; */
+    flex: 1;
     resize: horizontal;
     overflow: auto;
 }

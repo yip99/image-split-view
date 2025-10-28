@@ -4,7 +4,9 @@ const DEFAULT_TRANSFORMATION = {
     originY: 0,
     translateX: 0,
     translateY: 0,
-    scale: 1
+    scale: 1,
+    flipX: 1,
+    flipY: 1
 }
 
 const hasPositionChanged = ({ pos, prevPos }) => pos !== prevPos
@@ -23,8 +25,8 @@ const getTranslate = state => ({ pos, axis }) => {
         : translate
 }
 
-const getMatrix = ({ scale, translateX, translateY }) =>
-    `matrix(${scale}, 0, 0, ${scale}, ${translateX}, ${translateY})`
+const getMatrix = ({ scale, translateX, translateY, flipX, flipY }) =>
+    `matrix(${scale * flipX}, 0, 0, ${scale * flipY}, ${translateX}, ${translateY})`
 
 const clamp = (value, min, max) => Math.max(Math.min(value, max), min)
 
@@ -53,14 +55,14 @@ const clampedTranslate = ({ axis, translate, state }) => {
 
     // const range = Math.max(0, Math.round(imageScaledSize) - containerSize)
     const range = Math.max(0, !axisIsX && imageScaledSize < containerSize ? containerSize - Math.round(imageScaledSize) : Math.round(imageScaledSize) - containerSize)
-    
+
     const max = Math.round(range / 2)
     const min = 0 - max
     return clamp(translate, min + originOffset, max + originOffset)
 }
 
 const renderClamped = ({ state, translateX, translateY }) => {
-    const { originX, originY, scale } = state.transform
+    const { originX, originY } = state.transform
     state.transform.translateX = clampedTranslate({
         axis: "x",
         translate: translateX,
@@ -71,16 +73,11 @@ const renderClamped = ({ state, translateX, translateY }) => {
         translate: translateY,
         state
     })
-
     requestAnimationFrame(() => {
         if (state.transform.originOffset) {
             state.element.style.transformOrigin = `${originX}px ${originY}px`
         }
-        state.element.style.transform = getMatrix({
-            scale,
-            translateX: state.transform.translateX,
-            translateY: state.transform.translateY
-        })
+        state.element.style.transform = getMatrix(state.transform)
     })
 }
 
@@ -122,6 +119,7 @@ const canZoom = state => ({
         const translateY = translate({ pos: originY, axis: "y" })
 
         state.transform = {
+            ...state.transform,
             originOffset: true,
             originX: newOriginX,
             originY: newOriginY,
@@ -143,7 +141,6 @@ const canZoom = state => ({
         const originY = y - top
         const newOriginX = originX / scale
         const newOriginY = originY / scale
-
         const translate = getTranslate(state)
         const translateX = translate({ pos: originX, axis: "x" })
         const translateY = translate({ pos: originY, axis: "y" })
@@ -175,6 +172,7 @@ const canZoom = state => ({
         const translateY = translate({ pos: originY, axis: "y" })
 
         state.transform = {
+            ...state.transform,
             originOffset: true,
             originX: newOriginX,
             originY: newOriginY,
@@ -185,11 +183,7 @@ const canZoom = state => ({
 
         requestAnimationFrame(() => {
             state.element.style.transformOrigin = `${newOriginX}px ${newOriginY}px`
-            state.element.style.transform = getMatrix({
-                scale: newScale,
-                translateX,
-                translateY
-            })
+            state.element.style.transform = getMatrix(state.transform)
         })
     }
 })
@@ -199,10 +193,17 @@ const canInspect = state => ({
     reset: () => {
         state.transform.scale = state.minScale
         pan(state, { originX: 0, originY: 0 })
-        state.transform = DEFAULT_TRANSFORMATION
+        state.transform = { ...DEFAULT_TRANSFORMATION }
     },
     getState: () => state
 })
+
+const flip = (state, axis) => {
+    state.transform[axis === 'x' ? 'flipX' : 'flipY'] *= -1
+    requestAnimationFrame(() => {
+        state.element.style.transform = getMatrix(state.transform)
+    })
+}
 
 export const renderer = ({
     minScale,
@@ -223,6 +224,7 @@ export const renderer = ({
     return {
         ...canZoom(state),
         ...canPan(state),
-        ...canInspect(state)
+        ...canInspect(state),
+        flip: (axis) => flip(state, axis)
     }
 }
