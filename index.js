@@ -24,8 +24,18 @@ dropZone.addEventListener('drop', (e) => {
     console.log(...e.dataTransfer.items);
     console.log(e.dataTransfer.files);
     const fileList = e.dataTransfer && e.dataTransfer.files;
-    if (!fileList || !fileList.length) return;
-    appendImage([...fileList].filter(file => isImageFile(file)));
+    if (fileList && fileList.length) appendImage([...fileList].filter(file => isImageFile(file)));
+    const uri = e.dataTransfer && e.dataTransfer.getData('text/uri-list');
+    if (uri) {
+        const image = new Image();
+        image.src = uri;
+        image.onload = () => appendImage([image]);
+    }
+});
+
+document.addEventListener('paste', (event) => {
+    const items = event.clipboardData?.items;
+    if (items) appendImage([...items].filter(item => isImageFile(item)).map(item => item.getAsFile()));
 });
 
 function isImageFile(file) {
