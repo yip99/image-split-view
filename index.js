@@ -20,37 +20,58 @@ const dropZone = document.querySelector('html');
 );
 
 dropZone.addEventListener('drop', (e) => {
-    console.log(e.dataTransfer.types);
-    console.log(...e.dataTransfer.items);
-    console.log(e.dataTransfer.files);
+    // console.log(e.dataTransfer.types);
+    // console.log(...e.dataTransfer.items);
+    // console.log(e.dataTransfer.files);
+    // console.log(e.dataTransfer);
     const fileList = e.dataTransfer && e.dataTransfer.files;
-    if (fileList && fileList.length) appendImage([...fileList].filter(file => isImageFile(file)));
+    const imageFiles = [...fileList].filter(file => isImageFile(file));
+    // console.log('fileList:', ...fileList);
+    if (fileList && fileList.length) appendImage({ files: imageFiles });
     const uri = e.dataTransfer && e.dataTransfer.getData('text/uri-list');
-    if (uri) {
+    // console.log('uri:', uri);
+    if (!imageFiles.length && uri) {
         const image = new Image();
         image.src = uri;
-        image.onload = () => appendImage([image]);
+        image.alt = new URL(uri).pathname.split('/').pop() || '';
+        image.onload = () => appendImage({ images: [image] });
     }
 });
 
 document.addEventListener('paste', (event) => {
     const items = event.clipboardData?.items;
-    if (items) appendImage([...items].filter(item => isImageFile(item)).map(item => item.getAsFile()));
+    if (items) appendImage({ files: [...items].filter(item => isImageFile(item)).map(item => item.getAsFile()) });
+    try {
+        const url = event.clipboardData?.getData('text/plain');
+        if (url) {
+            const image = new Image();
+            image.src = url;
+            image.alt = new URL(url).pathname.split('/').pop() || '';
+            image.onload = () => appendImage({ images: [image] });
+        }
+    } catch (error) { }
 });
 
 function isImageFile(file) {
     return file && file.type && file.type.startsWith('image/');
 }
 
-async function appendImage(images) {
-    console.log({ images });
-    if (!images || !images.length) return;
-
-
-    for (const image of images) {
-        const url = URL.createObjectURL(image);
+async function appendImage({ files = [], images = [] }) {
+    for (const file of files) {
+        const url = URL.createObjectURL(file);
         // const { divElement, imageContainerElement, imageElement } = createImageElement(url, image.name || 'uploaded image');
-        const imageContainerElement = createImageElement(url, image.name || 'uploaded image');
+        const imageContainerElement = createImageElement(url, file.name || 'uploaded image');
+        const imageElement = imageContainerElement.querySelector('img');
+        document.querySelector('.images-container').appendChild(imageContainerElement);
+        imageElement.addEventListener('load', function () {
+            const zoompan = addZoomPan({ container: imageContainerElement, image: imageElement });
+            imageContainerElement.querySelector('button.reset')?.addEventListener('click', zoompan.reset);
+            imageContainerElement.querySelector('button.flip-x')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
+            imageContainerElement.querySelector('button.flip-y')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
+        });
+    }
+    for (const image of images) {
+        const imageContainerElement = createImageElement(image.src, image.alt || 'uploaded image');
         const imageElement = imageContainerElement.querySelector('img');
         document.querySelector('.images-container').appendChild(imageContainerElement);
         imageElement.addEventListener('load', function () {
