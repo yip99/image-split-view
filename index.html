@@ -16,7 +16,146 @@
 
 <body>
     <div class="images-container"></div>
-    <script type="module" src="index.js"></script>
+    <script type="module">
+        import * as icons from './icons.js';
+        import { addZoomPan } from './preview.js';
+        const dropZone = document.querySelector('html');
+
+        const image = new Image();
+        image.src = 'https://kpopping.com/documents/1c/2/800/251206-ChaeWon-at-First-Music-Fansign-Event-documents-1.jpeg';
+        image.alt = new URL(image.src).pathname.split('/').pop() || '';
+        image.onload = () => appendImage({ images: [image] });
+
+        ['dragenter', 'dragover'].forEach(evt =>
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('dragover');
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+            })
+        );
+
+        ['dragleave', 'dragend', 'drop'].forEach(evt =>
+            dropZone.addEventListener(evt, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('dragover');
+            })
+        );
+
+        dropZone.addEventListener('drop', (e) => {
+            // console.log(e.dataTransfer.types);
+            // console.log(...e.dataTransfer.items);
+            // console.log(e.dataTransfer.files);
+            // console.log(e.dataTransfer);
+            const fileList = e.dataTransfer && e.dataTransfer.files;
+            const imageFiles = [...fileList].filter(file => isImageFile(file));
+            // console.log('fileList:', ...fileList);
+            if (fileList && fileList.length) appendImage({ files: imageFiles });
+            const uri = e.dataTransfer && e.dataTransfer.getData('text/uri-list');
+            // console.log('uri:', uri);
+            if (!imageFiles.length && uri) {
+                const image = new Image();
+                image.src = uri;
+                image.alt = new URL(uri).pathname.split('/').pop() || '';
+                image.onload = () => appendImage({ images: [image] });
+            }
+        });
+
+        document.addEventListener('paste', (event) => {
+            const items = event.clipboardData?.items;
+            if (items) appendImage({ files: [...items].filter(item => isImageFile(item)).map(item => item.getAsFile()) });
+            try {
+                const url = event.clipboardData?.getData('text/plain');
+                if (url) {
+                    const image = new Image();
+                    image.src = url;
+                    image.alt = new URL(url).pathname.split('/').pop() || '';
+                    image.onload = () => appendImage({ images: [image] });
+                }
+            } catch (error) { }
+        });
+
+        function isImageFile(file) {
+            return file && file.type && file.type.startsWith('image/');
+        }
+
+        async function appendImage({ files = [], images = [] }) {
+            console.log({ files, images });
+            for (const file of files) {
+                const url = URL.createObjectURL(file);
+                // const { divElement, imageContainerElement, imageElement } = createImageElement(url, image.name || 'uploaded image');
+                const imageContainerElement = createImageElement(url, file.name || 'uploaded image');
+                const imageElement = imageContainerElement.querySelector('img');
+                document.querySelector('.images-container').appendChild(imageContainerElement);
+                imageElement.addEventListener('load', function () {
+                    const zoompan = addZoomPan({ container: imageContainerElement, image: imageElement });
+                    imageContainerElement.querySelector('button.reset')?.addEventListener('click', zoompan.reset);
+                    imageContainerElement.querySelector('button.flip-x')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
+                    imageContainerElement.querySelector('button.flip-y')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
+                });
+            }
+            for (const image of images) {
+                const imageContainerElement = createImageElement(image.src, image.alt || 'uploaded image');
+                const imageElement = imageContainerElement.querySelector('img');
+                document.querySelector('.images-container').appendChild(imageContainerElement);
+                imageElement.addEventListener('load', function () {
+                    const zoompan = addZoomPan({ container: imageContainerElement, image: imageElement });
+                    imageContainerElement.querySelector('button.reset')?.addEventListener('click', zoompan.reset);
+                    imageContainerElement.querySelector('button.flip-x')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
+                    imageContainerElement.querySelector('button.flip-y')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
+                });
+            }
+        }
+
+        function createImageElement(src, alt) {
+            const controlElement = createControlElement();
+            const divElement = document.createElement('div');
+            divElement.className = 'container';
+            const imageContainerElement = document.createElement('div');
+            // imageContainerElement.draggable = false;
+            imageContainerElement.className = 'image-container f-panzoom';
+            const imageElement = document.createElement('img');
+            imageElement.draggable = false;
+            imageElement.src = src;
+            imageElement.alt = alt;
+            imageElement.className = 'f-panzoom__content';
+            divElement.appendChild(imageContainerElement);
+            imageContainerElement.appendChild(controlElement);
+            imageContainerElement.appendChild(imageElement);
+            // return { divElement, imageContainerElement, imageElement };
+            return imageContainerElement;
+        }
+
+        function createControlElement() {
+            const controlElement = document.createElement('div');
+            controlElement.className = 'controls';
+
+            const toggle1to1Button = document.createElement('button');
+            toggle1to1Button.className = 'toggle-full';
+            toggle1to1Button.appendChild(icons.zoom1to1());
+            const rotateCCWButton = document.createElement('button');
+            rotateCCWButton.className = 'rotate-ccw';
+            rotateCCWButton.appendChild(icons.rotateCCW());
+            const rotateCWButton = document.createElement('button');
+            rotateCWButton.className = 'rotate-cw';
+            rotateCWButton.appendChild(icons.rotateCW());
+            const flipXButton = document.createElement('button');
+            flipXButton.className = 'flip-x';
+            flipXButton.value = 'x';
+            flipXButton.appendChild(icons.flipX());
+            const flipYButton = document.createElement('button');
+            flipYButton.className = 'flip-y';
+            flipYButton.value = 'y';
+            flipYButton.appendChild(icons.flipY());
+            const resetButton = document.createElement('button');
+            resetButton.className = 'reset';
+            resetButton.appendChild(icons.reset());
+
+            controlElement.append(toggle1to1Button, rotateCCWButton, rotateCWButton, flipXButton, flipYButton, resetButton);
+            return controlElement;
+        }
+    </script>
 </body>
 
 </html>

@@ -48,16 +48,22 @@ const clampedTranslate = ({ axis, translate, state }) => {
     const imageSize = state.element[axisKey]
     const bounds = state.element.getBoundingClientRect()
 
-    const imageScaledSize = axisIsX ? bounds.width : bounds.height
+    // const imageScaledSize = axisIsX ? bounds.width : bounds.height
+    const imageScaledSize = imageSize * scale
 
     const defaultOrigin = imageSize / 2
     const originOffset = (origin - defaultOrigin) * (scale - 1)
 
     // const range = Math.max(0, Math.round(imageScaledSize) - containerSize)
-    const range = Math.max(0, !axisIsX && imageScaledSize < containerSize ? containerSize - Math.round(imageScaledSize) : Math.round(imageScaledSize) - containerSize)
+    const range = Math.max(0,
+        !axisIsX && imageScaledSize < containerSize
+            ? containerSize - Math.round(imageScaledSize)
+            : Math.round(imageScaledSize) - containerSize
+    )
 
     const max = Math.round(range / 2)
     const min = 0 - max
+    console.log({ scale, originX, originY, axisIsX, origin, axisKey, containerSize, imageSize, bounds, imageScaledSize, defaultOrigin, originOffset, range, max, min });
     return clamp(translate, min + originOffset, max + originOffset)
 }
 
