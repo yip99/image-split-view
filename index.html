@@ -21,11 +21,6 @@
         import { addZoomPan } from './preview.js';
         const dropZone = document.querySelector('html');
 
-        const image = new Image();
-        image.src = 'https://kpopping.com/documents/1c/2/800/251206-ChaeWon-at-First-Music-Fansign-Event-documents-1.jpeg';
-        image.alt = new URL(image.src).pathname.split('/').pop() || '';
-        image.onload = () => appendImage({ images: [image] });
-
         ['dragenter', 'dragover'].forEach(evt =>
             dropZone.addEventListener(evt, (e) => {
                 e.preventDefault();
