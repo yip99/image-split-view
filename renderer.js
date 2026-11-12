@@ -1,236 +1,203 @@
 const DEFAULT_TRANSFORMATION = {
-    originOffset: false,
-    originX: 0,
-    originY: 0,
     translateX: 0,
     translateY: 0,
     scale: 1,
     flipX: 1,
-    flipY: 1
-}
+    flipY: 1,
+    rotation: 0
+};
 
-const hasPositionChanged = ({ pos, prevPos }) => pos !== prevPos
+const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
 
-const valueInRange = ({ minScale, maxScale, transform: { scale } }) =>
-    scale <= maxScale && scale >= minScale
+const getLinearMatrix = ({ scale, flipX, flipY, rotation }) => {
+    const radians = rotation * Math.PI / 180;
+    let cos = Math.cos(radians);
+    let sin = Math.sin(radians);
 
-const getTranslate = state => ({ pos, axis }) => {
-    const { originX, originY, translateX, translateY, scale } = state.transform
-    const axisIsX = axis === "x"
-    const prevPos = axisIsX ? originX : originY
-    const translate = axisIsX ? translateX : translateY
+    // Remove floating-point noise at 90-degree increments.
+    if (Math.abs(cos) < 1e-10) cos = 0;
+    if (Math.abs(sin) < 1e-10) sin = 0;
 
-    return valueInRange(state) && hasPositionChanged({ pos, prevPos })
-        ? translate + (pos - prevPos * scale) * (1 - 1 / scale)
-        : translate
-}
+    return {
+        a: scale * cos * flipX,
+        b: scale * sin * flipX,
+        c: -scale * sin * flipY,
+        d: scale * cos * flipY
+    };
+};
 
-const getMatrix = ({ scale, translateX, translateY, flipX, flipY }) =>
-    `matrix(${scale * flipX}, 0, 0, ${scale * flipY}, ${translateX}, ${translateY})`
+const getMatrix = transform => {
+    const { a, b, c, d } = getLinearMatrix(transform);
+    return `matrix(${a}, ${b}, ${c}, ${d}, ${transform.translateX}, ${transform.translateY})`;
+};
 
-const clamp = (value, min, max) => Math.max(Math.min(value, max), min)
+const getNewScale = (deltaScale, state) => {
+    const { scale } = state.transform;
+    const sensitivity = state.scaleSensitivity;
+    return clamp(
+        scale + deltaScale / (sensitivity / scale),
+        state.minScale,
+        state.maxScale
+    );
+};
 
-const getNewScale = (
-    deltaScale,
-    { transform: { scale }, minScale, maxScale, scaleSensitivity }
-) => {
-    const newScale = scale + deltaScale / (scaleSensitivity / scale)
-    return clamp(newScale, minScale, maxScale)
-}
+const getRotatedBounds = state => {
+    const { scale, rotation } = state.transform;
+    const radians = rotation * Math.PI / 180;
+    const cos = Math.abs(Math.cos(radians));
+    const sin = Math.abs(Math.sin(radians));
+    const width = state.element.offsetWidth;
+    const height = state.element.offsetHeight;
 
-const clampedTranslate = ({ axis, translate, state }) => {
-    const { scale, originX, originY } = state.transform
-    const axisIsX = axis === "x"
-    const origin = axisIsX ? originX : originY
-    const axisKey = axisIsX ? "offsetWidth" : "offsetHeight"
+    return {
+        width: (width * cos + height * sin) * scale,
+        height: (height * cos + width * sin) * scale
+    };
+};
 
-    const containerSize = state.container[axisKey]
-    const imageSize = state.element[axisKey]
-    const bounds = state.element.getBoundingClientRect()
+const clampTranslation = state => {
+    const bounds = getRotatedBounds(state);
+    const containerWidth = state.container.clientWidth;
+    const containerHeight = state.container.clientHeight;
 
-    // const imageScaledSize = axisIsX ? bounds.width : bounds.height
-    const imageScaledSize = imageSize * scale
+    const maxX = Math.max(0, (bounds.width - containerWidth) / 2);
+    const maxY = Math.max(0, (bounds.height - containerHeight) / 2);
 
-    const defaultOrigin = imageSize / 2
-    const originOffset = (origin - defaultOrigin) * (scale - 1)
+    state.transform.translateX = clamp(
+        state.transform.translateX,
+        -maxX,
+        maxX
+    );
 
-    // const range = Math.max(0, Math.round(imageScaledSize) - containerSize)
-    const range = Math.max(0,
-        !axisIsX && imageScaledSize < containerSize
-            ? containerSize - Math.round(imageScaledSize)
-            : Math.round(imageScaledSize) - containerSize
-    )
+    state.transform.translateY = clamp(
+        state.transform.translateY,
+        -maxY,
+        maxY
+    );
+};
 
-    const max = Math.round(range / 2)
-    const min = 0 - max
-    console.log({ scale, originX, originY, axisIsX, origin, axisKey, containerSize, imageSize, bounds, imageScaledSize, defaultOrigin, originOffset, range, max, min });
-    return clamp(translate, min + originOffset, max + originOffset)
-}
+const render = state => {
+    clampTranslation(state);
 
-const renderClamped = ({ state, translateX, translateY }) => {
-    const { originX, originY } = state.transform
-    state.transform.translateX = clampedTranslate({
-        axis: "x",
-        translate: translateX,
-        state
-    })
-    state.transform.translateY = clampedTranslate({
-        axis: "y",
-        translate: translateY,
-        state
-    })
-    requestAnimationFrame(() => {
-        if (state.transform.originOffset) {
-            state.element.style.transformOrigin = `${originX}px ${originY}px`
-        }
-        state.element.style.transform = getMatrix(state.transform)
-    })
-}
+    // Every operation uses the same center origin, so rotation, zoom and flips compose.
+    state.element.style.transformOrigin = '50% 50%';
+    state.element.style.transform = getMatrix(state.transform);
+};
 
-const pan = (state, { originX, originY }) => {
-    renderClamped({
-        state,
-        translateX: state.transform.translateX + originX,
-        translateY: state.transform.translateY + originY
-    })
-}
-
-const canPan = state => ({
-    panBy: origin => pan(state, origin),
-    panTo: ({ originX, originY, scale }) => {
-        state.transform.scale = clamp(scale, state.minScale, state.maxScale)
-
-        pan(state, {
-            originX: originX - state.transform.translateX,
-            originY: originY - state.transform.translateY
-        })
+const scheduleRender = state => {
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => render(state));
+    } else {
+        render(state);
     }
-})
+};
 
-const canZoom = state => ({
-    zoomPan: ({ scale: scaleValue, x, y, deltaX, deltaY }) => {
-        const {
-            minScale,
-            maxScale,
-            transform: { scale }
-        } = state
-        const newScale = clamp(scaleValue, minScale, maxScale)
-        const { left, top } = state.element.getBoundingClientRect()
-        const originX = x - left
-        const originY = y - top
-        const newOriginX = originX / scale
-        const newOriginY = originY / scale
-        const translate = getTranslate(state)
-        const translateX = translate({ pos: originX, axis: "x" })
-        const translateY = translate({ pos: originY, axis: "y" })
+const pan = (state, deltaX, deltaY) => {
+    state.transform.translateX += deltaX;
+    state.transform.translateY += deltaY;
+    scheduleRender(state);
+};
 
-        state.transform = {
-            ...state.transform,
-            originOffset: true,
-            originX: newOriginX,
-            originY: newOriginY,
-            translateX,
-            translateY,
-            scale: newScale
-        }
+// Zoom around a screen point while retaining the point under the pointer.
+const zoomAroundPoint = (state, { newScale, x, y, deltaX = 0, deltaY = 0 }) => {
+    const transform = state.transform;
+    const oldScale = transform.scale;
+    const factor = newScale / oldScale;
+    const rect = state.element.getBoundingClientRect();
 
-        pan(state, { originX: deltaX, originY: deltaY })
-    },
-    zoom: ({ x, y, deltaScale }) => {
-        const {
-            element,
-            transform: { scale }
-        } = state
-        const { left, top } = element.getBoundingClientRect()
-        const newScale = getNewScale(deltaScale, state)
-        const originX = x - left
-        const originY = y - top
-        const newOriginX = originX / scale
-        const newOriginY = originY / scale
-        const translate = getTranslate(state)
-        const translateX = translate({ pos: originX, axis: "x" })
-        const translateY = translate({ pos: originY, axis: "y" })
+    // The transformed bounding rectangle's center is the visual image center.
+    // Subtract translation to recover the untransformed layout center.
+    const centerX = rect.left + rect.width / 2 - transform.translateX;
+    const centerY = rect.top + rect.height / 2 - transform.translateY;
 
-        state.transform = {
-            ...state.transform,
-            originOffset: true,
-            originX: newOriginX,
-            originY: newOriginY,
-            scale: newScale
-        }
+    transform.translateX =
+        factor * transform.translateX +
+        (1 - factor) * (x - centerX) + deltaX;
 
-        renderClamped({ state, translateX, translateY })
-    },
-    zoomTo: ({ newScale, x, y }) => {
-        const {
-            element,
-            transform: { scale }
-        } = state
+    transform.translateY =
+        factor * transform.translateY +
+        (1 - factor) * (y - centerY) + deltaY;
 
-        const { left, top } = element.getBoundingClientRect()
-        const originX = x - left
-        const originY = y - top
-        const newOriginX = originX / scale
-        const newOriginY = originY / scale
+    transform.scale = newScale;
+    scheduleRender(state);
+};
 
-        const translate = getTranslate(state)
-        const translateX = translate({ pos: originX, axis: "x" })
-        const translateY = translate({ pos: originY, axis: "y" })
-
-        state.transform = {
-            ...state.transform,
-            originOffset: true,
-            originX: newOriginX,
-            originY: newOriginY,
-            scale: newScale,
-            translateX,
-            translateY
-        }
-
-        requestAnimationFrame(() => {
-            state.element.style.transformOrigin = `${newOriginX}px ${newOriginY}px`
-            state.element.style.transform = getMatrix(state.transform)
-        })
-    }
-})
-
-const canInspect = state => ({
-    getScale: () => state.transform.scale,
-    reset: () => {
-        state.transform.scale = state.minScale
-        pan(state, { originX: 0, originY: 0 })
-        state.transform = { ...DEFAULT_TRANSFORMATION }
-    },
-    getState: () => state
-})
+const rotate = (state, degrees) => {
+    state.transform.rotation =
+        ((state.transform.rotation + degrees) % 360 + 360) % 360;
+    scheduleRender(state);
+};
 
 const flip = (state, axis) => {
-    state.transform[axis === 'x' ? 'flipX' : 'flipY'] *= -1
-    requestAnimationFrame(() => {
-        state.element.style.transform = getMatrix(state.transform)
-    })
-}
+    if (axis === 'x') {
+        state.transform.flipX *= -1;
+    } else if (axis === 'y') {
+        state.transform.flipY *= -1;
+    } else {
+        throw new TypeError(`Unknown flip axis: ${axis}`);
+    }
+
+    scheduleRender(state);
+};
 
 export const renderer = ({
-    minScale,
-    maxScale,
+    minScale = 1,
+    maxScale = 4,
     element,
     container,
-    scaleSensitivity = 10
+    scaleSensitivity = 20
 }) => {
+    if (!element || !container) {
+        throw new TypeError('renderer requires both an image element and a container');
+    }
+
     const state = {
-        container,
         element,
+        container,
         minScale,
         maxScale,
         scaleSensitivity,
-        accumulatedDeltaScale: 0,
         transform: { ...DEFAULT_TRANSFORMATION }
-    }
+    };
+
+    const zoomTo = ({ newScale, x, y }) => {
+        const safeScale = clamp(newScale, state.minScale, state.maxScale);
+        zoomAroundPoint(state, { newScale: safeScale, x, y });
+    };
+
     return {
-        ...canZoom(state),
-        ...canPan(state),
-        ...canInspect(state),
-        flip: (axis) => flip(state, axis)
-    }
-}
+        panBy: ({ originX = 0, originY = 0 }) => pan(state, originX, originY),
+
+        panTo: ({ originX = 0, originY = 0, scale = state.transform.scale }) => {
+            state.transform.scale = clamp(scale, state.minScale, state.maxScale);
+            state.transform.translateX = originX;
+            state.transform.translateY = originY;
+            scheduleRender(state);
+        },
+
+        zoomPan: ({ scale, x, y, deltaX = 0, deltaY = 0 }) => {
+            const newScale = clamp(scale, state.minScale, state.maxScale);
+            zoomAroundPoint(state, { newScale, x, y, deltaX, deltaY });
+        },
+
+        zoom: ({ x, y, deltaScale }) => {
+            zoomAroundPoint(state, {
+                newScale: getNewScale(deltaScale, state),
+                x,
+                y
+            });
+        },
+
+        zoomTo,
+        rotate: degrees => rotate(state, degrees),
+        flip: axis => flip(state, axis),
+
+        getScale: () => state.transform.scale,
+        getState: () => state,
+
+        reset: () => {
+            state.transform = { ...DEFAULT_TRANSFORMATION };
+            scheduleRender(state);
+        }
+    };
+};

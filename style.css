@@ -9,140 +9,380 @@
     --error: #ff6b6b;
 }
 
+* {
+    box-sizing: border-box;
+}
+
 html,
 body {
-    height: 100vh;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
     overflow: hidden;
     margin: 0;
 }
 
 html {
-    background-color: black;
+    background: #000;
 }
 
 body {
     display: flex;
     justify-content: center;
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.dragover {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 6px rgba(106, 161, 255, .12) inset, 0 0 0 1px rgba(106, 161, 255, .25);
+html.dragover {
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 0 6px rgba(106, 161, 255, .12) inset,
+        0 0 0 1px rgba(106, 161, 255, .25);
     background: #0f1833;
 }
 
 .images-container {
-    /* width: 100vw; */
+    width: 100vw;
     max-width: 100vw;
     height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: center;
-    width: fit-content;
-
-    & * {
-        user-select: none;
-    }
-}
-
-.image-container::-webkit-scrollbar {
-    display: none;
-    /* Older Safari and Chromium */
-}
-
-.image-container {
-    -ms-overflow-style: none;
-    /* Internet Explorer 10+ */
-    scrollbar-width: none;
-    /* Firefox, Safari 18.2+, Chromium 121+ */
-    /* max-width: fit-content; */
-    /* width: 100%; */
-    /* align-content: center; */
-    height: 100%;
-    max-height: 100%;
-    resize: horizontal;
-    /* max-width: fit-content; */
-    /* height: fit-content; */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    scroll-snap-align: start;
-    touch-action: manipulation;
-    flex-shrink: 0;
-    overflow-x: clip;
-    /* width: calc(100% / sibling-count()); */
-    position: relative;
-    flex: 1;
-    resize: horizontal;
+    align-items: stretch;
     overflow: auto;
 }
 
-img {
-    /* position: absolute; */
-    /* inset: 0; */
-    width: 100%;
-    height: 100%;
-    /* max-height: 100%; */
-    object-fit: contain;
-    /* height: fit-content; */
-    width: fit-content;
+.images-container,
+.images-container * {
+    user-select: none;
 }
+
+.image-container {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    flex-shrink: 0;
+    touch-action: none;
+    background: #000;
+}
+
+.image-container img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    pointer-events: auto;
+    -webkit-user-drag: none;
+}
+
+.image-container.image-load-error::after {
+    content: "Unable to load image";
+    position: absolute;
+    inset: auto 12px 12px;
+    color: var(--error);
+    font-size: 13px;
+    text-align: center;
+}
+
+/* ---------------------------------------
+   Per-image controls
+--------------------------------------- */
 
 .controls {
     position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 20;
     display: flex;
+    align-items: center;
     justify-content: center;
     flex-wrap: wrap;
-    margin: var(--f-controls-margin, 0 0 auto 0);
-    /* padding: var(--f-controls-padding, 8px); */
-    z-index: var(--f-controls-z-index, 20);
-    opacity: 0;
+    gap: 3px;
     width: 100%;
-    /* padding: 1em; */
-    /* padding-bottom: 1em; */
-    top: 0;
-    height: calc(var(--f-button-height) * 2);
-    width: fit-content;
+    height: auto;
+    padding: 6px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+    pointer-events: none;
 }
 
-.controls:hover {
+.image-container:hover>.controls,
+.controls:focus-within {
     opacity: 1;
 }
 
 .controls button {
-    width: var(--f-button-width);
-    height: var(--f-button-height);
-    border: var(--f-button-border);
-    border-radius: var(--f-button-border-radius);
-    color: var(--f-button-color);
-    background: var(--f-button-bg);
-    box-shadow: var(--f-button-shadow);
-    transform: var(--f-button-transform);
-    transition: var(--f-button-transition);
-    backdrop-filter: var(--f-button-backdrop-filter);
-    display: flex;
-    justify-content: center;
+    display: inline-flex;
     align-items: center;
-    box-sizing: content-box;
-    position: relative;
+    justify-content: center;
+    width: 34px;
+    min-width: 28px;
+    height: 34px;
     margin: 0;
-    padding: 0;
-    pointer-events: all;
-    cursor: pointer;
+    padding: 5px;
     overflow: hidden;
+    border: 1px solid rgba(230, 235, 255, .18);
+    border-radius: 6px;
+    color: var(--text);
+    background: rgba(18, 24, 43, .94);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+    cursor: pointer;
+    pointer-events: auto;
 }
 
-svg {
-    width: var(--f-button-svg-width);
-    height: var(--f-button-svg-height);
-    transform: var(--f-button-svg-transform);
-    fill: var(--f-button-svg-fill);
-    filter: var(--f-button-svg-filter);
-    opacity: var(--f-button-svg-opacity, 1);
-    transition: var(--f-button-svg-transition);
+.controls button:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.controls button svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
     stroke: currentColor;
-    stroke-width: var(--f-button-svg-stroke-width);
+    stroke-width: 1.7;
     stroke-linecap: round;
     stroke-linejoin: round;
     pointer-events: none;
+}
+
+.controls button.compare-a,
+.controls button.compare-b,
+.controls button.remove-image {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.controls button.is-selected {
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.controls button.remove-image {
+    color: var(--error);
+    font-size: 21px;
+}
+
+.controls button.remove-image:hover {
+    color: #fff;
+    background: var(--error);
+}
+
+@media (hover: none) {
+    .image-container>.controls {
+        opacity: 1;
+    }
+}
+
+/* ---------------------------------------
+   Comparison mode
+--------------------------------------- */
+
+.comparison-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    width: 100vw;
+    height: 100vh;
+    background: var(--bg);
+}
+
+.comparison-stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+/* Both images share one transformed wrapper. */
+.comparison-images {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+}
+
+.comparison-image {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.compare-image-under {
+    z-index: 1;
+}
+
+.compare-image-top {
+    z-index: 2;
+    opacity: 1;
+    transition: opacity 60ms linear;
+}
+
+.comparison-overlay.show-under .compare-image-top {
+    opacity: 0;
+}
+
+/* ---------------------------------------
+   Combined comparison toolbar
+--------------------------------------- */
+
+.controls.comparison-controls {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: auto;
+    z-index: 20;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+
+    gap: 3px;
+    width: 100%;
+    height: auto;
+    margin: 0;
+    padding: 6px;
+
+    opacity: 1;
+    transition: opacity 120ms ease;
+    pointer-events: none;
+
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+.controls.comparison-controls:focus-within {
+    opacity: 1;
+}
+
+.controls.comparison-controls button {
+    width: 34px;
+    min-width: 28px;
+    height: 34px;
+    margin: 0;
+    padding: 5px;
+
+    border: 1px solid rgba(230, 235, 255, .18);
+    border-radius: 6px;
+
+    color: var(--text);
+    background: rgba(18, 24, 43, .94);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.controls.comparison-controls button:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
+.controls.comparison-controls button svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+.controls.comparison-controls button.compare-a,
+.controls.comparison-controls button.compare-b {
+    width: 34px;
+    min-width: 28px;
+    padding: 5px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.controls.comparison-controls button.is-selected {
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+/* ---------------------------------------
+   Mobile
+--------------------------------------- */
+
+@media (max-width: 600px) {
+    .controls.comparison-controls {
+        gap: 2px;
+        padding: 4px;
+    }
+
+    .controls.comparison-controls button {
+        width: 30px;
+        min-width: 26px;
+        height: 30px;
+        padding: 4px;
+    }
+}
+
+/* ---------------------------------------
+   Mobile
+--------------------------------------- */
+
+@media (max-width: 600px) {
+    .controls {
+        gap: 2px;
+        padding: 4px;
+    }
+
+    .controls button {
+        width: 30px;
+        min-width: 26px;
+        height: 30px;
+        padding: 4px;
+    }
+
+    .controls.comparison-controls {
+        top: 8px;
+        right: 8px;
+        max-width: calc(100vw - 16px);
+        gap: 4px;
+        padding: 6px;
+    }
+
+    .controls.comparison-controls button {
+        width: 34px;
+        min-width: 34px;
+        height: 32px;
+        padding: 4px;
+    }
+
+    .controls.comparison-controls button.compare-a,
+    .controls.comparison-controls button.compare-b {
+        min-width: 40px;
+        padding: 0 8px;
+    }
 }

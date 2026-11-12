@@ -1,221 +1,548 @@
+
 import * as icons from './icons.js';
 import { addZoomPan } from './preview.js';
+
 const dropZone = document.querySelector('html');
+const imagesContainer = document.querySelector('.images-container');
 
-['dragenter', 'dragover'].forEach(evt =>
-    dropZone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropZone.classList.add('dragover');
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-    })
-);
-
-['dragleave', 'dragend', 'drop'].forEach(evt =>
-    dropZone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropZone.classList.remove('dragover');
-    })
-);
-
-dropZone.addEventListener('drop', (e) => {
-    // console.log(e.dataTransfer.types);
-    // console.log(...e.dataTransfer.items);
-    // console.log(e.dataTransfer.files);
-    // console.log(e.dataTransfer);
-    const fileList = e.dataTransfer && e.dataTransfer.files;
-    const imageFiles = [...fileList].filter(file => isImageFile(file));
-    // console.log('fileList:', ...fileList);
-    if (fileList && fileList.length) appendImage({ files: imageFiles });
-    const uri = e.dataTransfer && e.dataTransfer.getData('text/uri-list');
-    // console.log('uri:', uri);
-    if (!imageFiles.length && uri) {
-        const image = new Image();
-        image.src = uri;
-        image.alt = new URL(uri).pathname.split('/').pop() || '';
-        image.onload = () => appendImage({ images: [image] });
-    }
-});
-
-document.addEventListener('paste', (event) => {
-    const items = event.clipboardData?.items;
-    if (items) appendImage({ files: [...items].filter(item => isImageFile(item)).map(item => item.getAsFile()) });
-    try {
-        const url = event.clipboardData?.getData('text/plain');
-        if (url) {
-            const image = new Image();
-            image.src = url;
-            image.alt = new URL(url).pathname.split('/').pop() || '';
-            image.onload = () => appendImage({ images: [image] });
-        }
-    } catch (error) { }
-});
-
-function isImageFile(file) {
-    return file && file.type && file.type.startsWith('image/');
+if (!imagesContainer) {
+    throw new Error('Missing .images-container element in index.html');
 }
 
-async function appendImage({ files = [], images = [] }) {
-    for (const file of files) {
-        const url = URL.createObjectURL(file);
-        // const { divElement, imageContainerElement, imageElement } = createImageElement(url, image.name || 'uploaded image');
-        const imageContainerElement = createImageElement(url, file.name || 'uploaded image');
-        const imageElement = imageContainerElement.querySelector('img');
-        document.querySelector('.images-container').appendChild(imageContainerElement);
-        imageElement.addEventListener('load', function () {
-            const zoompan = addZoomPan({ container: imageContainerElement, image: imageElement });
-            imageContainerElement.querySelector('button.reset')?.addEventListener('click', zoompan.reset);
-            imageContainerElement.querySelector('button.flip-x')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
-            imageContainerElement.querySelector('button.flip-y')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
-        });
+const imageItems = new Map();
+
+let nextImageId = 0;
+let compareAId = null;
+let compareBId = null;
+let comparisonOverlay = null;
+let comparisonCleanup = null;
+let comparisonZoompan = null;
+
+// --------------------------------------------------
+// Generic button helper
+// --------------------------------------------------
+
+function createButton(className, label, title) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = label;
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    return button;
+}
+
+// --------------------------------------------------
+// Comparison selection
+// --------------------------------------------------
+
+function selectForComparison(id, slot) {
+    if (!imageItems.has(id)) return;
+
+    const selectedId = slot === 'A' ? compareAId : compareBId;
+
+    // Clicking the active A/B button deselects that image.
+    if (selectedId === id) {
+        deselectComparisonSlot(slot);
+        return;
     }
-    for (const image of images) {
-        const imageContainerElement = createImageElement(image.src, image.alt || 'uploaded image');
-        const imageElement = imageContainerElement.querySelector('img');
-        document.querySelector('.images-container').appendChild(imageContainerElement);
-        imageElement.addEventListener('load', function () {
-            const zoompan = addZoomPan({ container: imageContainerElement, image: imageElement });
-            imageContainerElement.querySelector('button.reset')?.addEventListener('click', zoompan.reset);
-            imageContainerElement.querySelector('button.flip-x')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
-            imageContainerElement.querySelector('button.flip-y')?.addEventListener('click', (event) => console.log(zoompan.flip(event)));
-        });
+
+    if (slot === 'A') {
+        compareAId = id;
+        if (compareBId === id) compareBId = null;
+    } else {
+        compareBId = id;
+        if (compareAId === id) compareAId = null;
+    }
+
+    updateCompareControls();
+
+    // Selecting both images automatically enters comparison mode.
+    if (compareAId !== null && compareBId !== null) {
+        openComparison();
+    } else {
+        closeComparison();
     }
 }
 
-function createImageElement(src, alt) {
-    const controlElement = createControlElement();
-    const divElement = document.createElement('div');
-    divElement.className = 'container';
-    const imageContainerElement = document.createElement('div');
-    // imageContainerElement.draggable = false;
-    imageContainerElement.className = 'image-container f-panzoom';
-    const imageElement = document.createElement('img');
-    imageElement.draggable = false;
-    imageElement.src = src;
-    imageElement.alt = alt;
-    imageElement.className = 'f-panzoom__content';
-    divElement.appendChild(imageContainerElement);
-    imageContainerElement.appendChild(controlElement);
-    imageContainerElement.appendChild(imageElement);
-    // return { divElement, imageContainerElement, imageElement };
-    return imageContainerElement;
+function deselectComparisonSlot(slot) {
+    if (slot === 'A') {
+        compareAId = null;
+    } else if (slot === 'B') {
+        compareBId = null;
+    }
+
+    // Deselecting either side exits comparison mode.
+    closeComparison();
+    updateCompareControls();
 }
+
+function updateCompareControls() {
+    for (const item of imageItems.values()) {
+        const isA = item.id === compareAId;
+        const isB = item.id === compareBId;
+
+        item.container.classList.toggle('is-compare-a', isA);
+        item.container.classList.toggle('is-compare-b', isB);
+        item.compareAButton.classList.toggle('is-selected', isA);
+        item.compareBButton.classList.toggle('is-selected', isB);
+    }
+}
+
+// --------------------------------------------------
+// Comparison mode
+// --------------------------------------------------
+
+function openComparison() {
+    const imageA = imageItems.get(compareAId);
+    const imageB = imageItems.get(compareBId);
+
+    if (!imageA || !imageB || compareAId === compareBId) return;
+
+    // Keep the current overlay if the selected pair has not changed.
+    if (
+        comparisonOverlay &&
+        comparisonOverlay.dataset.imageA === String(compareAId) &&
+        comparisonOverlay.dataset.imageB === String(compareBId)
+    ) {
+        return;
+    }
+
+    closeComparison();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'comparison-overlay';
+    overlay.dataset.imageA = String(compareAId);
+    overlay.dataset.imageB = String(compareBId);
+
+    const stage = document.createElement('div');
+    stage.className = 'comparison-stage';
+
+    // A shared wrapper allows both images to use the same transformation.
+    const comparisonImages = document.createElement('div');
+    comparisonImages.className = 'comparison-images';
+
+    // B is the background image.
+    const underImage = document.createElement('img');
+    underImage.className = 'comparison-image compare-image-under';
+    underImage.src = imageB.src;
+    underImage.alt = `Comparison image B: ${imageB.name}`;
+    underImage.draggable = false;
+
+    // A is the foreground image.
+    const topImage = document.createElement('img');
+    topImage.className = 'comparison-image compare-image-top';
+    topImage.src = imageA.src;
+    topImage.alt = `Comparison image A: ${imageA.name}`;
+    topImage.draggable = false;
+
+    comparisonImages.append(underImage, topImage);
+
+    // Build one combined toolbar using the existing image controls.
+    const {
+        controls,
+        zoom1to1Button,
+        rotateCCWButton,
+        rotateCWButton,
+        flipXButton,
+        flipYButton,
+        resetButton,
+        compareAButton,
+        compareBButton,
+        removeButton
+    } = createControlElement();
+
+    // The comparison toolbar does not need an image removal button.
+    removeButton.remove();
+
+    controls.classList.add('comparison-controls');
+
+    // Both images are selected while comparison mode is active.
+    compareAButton.classList.add('is-selected');
+    compareBButton.classList.add('is-selected');
+
+    stage.append(comparisonImages, controls);
+    overlay.appendChild(stage);
+    document.body.appendChild(overlay);
+
+    comparisonOverlay = overlay;
+
+    // Apply transformations to the shared wrapper so both images
+    // always remain aligned.
+    comparisonZoompan = addZoomPan({
+        container: stage,
+        image: comparisonImages
+    });
+
+    // Combined transformation controls.
+    zoom1to1Button.addEventListener('click', () => {
+        comparisonZoompan?.zoom1to1();
+    });
+
+    rotateCCWButton.addEventListener('click', () => {
+        comparisonZoompan?.rotateCCW();
+    });
+
+    rotateCWButton.addEventListener('click', () => {
+        comparisonZoompan?.rotateCW();
+    });
+
+    flipXButton.addEventListener('click', () => {
+        comparisonZoompan?.flip('x');
+    });
+
+    flipYButton.addEventListener('click', () => {
+        comparisonZoompan?.flip('y');
+    });
+
+    resetButton.addEventListener('click', () => {
+        comparisonZoompan?.reset();
+    });
+
+    // Clicking a selected A/B button deselects that image and exits.
+    compareAButton.addEventListener('click', () => {
+        deselectComparisonSlot('A');
+    });
+
+    compareBButton.addEventListener('click', () => {
+        deselectComparisonSlot('B');
+    });
+
+    // Holding the pointer over the image area reveals B.
+    // Clicking the controls must not trigger the reveal action.
+    const onPointerDown = event => {
+        if (event.target.closest('.comparison-controls')) return;
+
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+        event.preventDefault();
+        overlay.classList.add('show-under');
+    };
+
+    const onPointerEnd = () => {
+        overlay.classList.remove('show-under');
+    };
+
+    const onWindowBlur = () => {
+        overlay.classList.remove('show-under');
+    };
+
+    const onKeyDown = event => {
+        if (event.key === 'Escape') closeComparison();
+    };
+
+    stage.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('pointerup', onPointerEnd);
+    document.addEventListener('pointercancel', onPointerEnd);
+    window.addEventListener('blur', onWindowBlur);
+    document.addEventListener('keydown', onKeyDown);
+
+    comparisonCleanup = () => {
+        stage.removeEventListener('pointerdown', onPointerDown);
+        document.removeEventListener('pointerup', onPointerEnd);
+        document.removeEventListener('pointercancel', onPointerEnd);
+        window.removeEventListener('blur', onWindowBlur);
+        document.removeEventListener('keydown', onKeyDown);
+    };
+}
+
+function closeComparison() {
+    if (!comparisonOverlay) return;
+
+    comparisonCleanup?.();
+    comparisonCleanup = null;
+
+    comparisonZoompan?.destroy();
+    comparisonZoompan = null;
+
+    comparisonOverlay.remove();
+    comparisonOverlay = null;
+}
+
+// --------------------------------------------------
+// Image removal
+// --------------------------------------------------
+
+function removeImage(id) {
+    const item = imageItems.get(id);
+    if (!item) return;
+
+    if (compareAId === id) compareAId = null;
+    if (compareBId === id) compareBId = null;
+
+    // A removed image cannot remain in an active comparison.
+    if (!compareAId || !compareBId) closeComparison();
+
+    item.zoompan?.destroy();
+    item.container.remove();
+    imageItems.delete(id);
+
+    if (item.revokeOnRemove) {
+        URL.revokeObjectURL(item.src);
+    }
+
+    updateCompareControls();
+}
+
+// --------------------------------------------------
+// Per-image controls
+// --------------------------------------------------
 
 function createControlElement() {
-    const controlElement = document.createElement('div');
-    controlElement.className = 'controls';
+    const controls = document.createElement('div');
+    controls.className = 'controls';
 
-    const toggle1to1Button = document.createElement('button');
-    toggle1to1Button.className = 'toggle-full';
-    toggle1to1Button.appendChild(icons.zoom1to1());
-    // toggle1to1Button.setAttribute('data-panzoom-action', 'toggleFull');
-    const rotateCCWButton = document.createElement('button');
-    rotateCCWButton.className = 'rotate-ccw';
+    const zoom1to1Button = createButton(
+        'toggle-full', '', 'Zoom to 1:1 (fit scale)'
+    );
+    zoom1to1Button.appendChild(icons.zoom1to1());
+
+    const rotateCCWButton = createButton(
+        'rotate-ccw', '', 'Rotate counterclockwise'
+    );
     rotateCCWButton.appendChild(icons.rotateCCW());
-    // rotateCCWButton.setAttribute('data-panzoom-action', 'rotateCCW');
-    const rotateCWButton = document.createElement('button');
-    rotateCWButton.className = 'rotate-cw';
-    rotateCWButton.appendChild(icons.rotateCW());
-    // rotateCWButton.setAttribute('data-panzoom-action', 'rotateCW');
-    const flipXButton = document.createElement('button');
-    flipXButton.className = 'flip-x';
-    flipXButton.value = 'x';
-    flipXButton.appendChild(icons.flipX());
-    // flipXButton.setAttribute('data-panzoom-action', 'flipX');
-    const flipYButton = document.createElement('button');
-    flipYButton.className = 'flip-y';
-    flipYButton.value = 'y';
-    flipYButton.appendChild(icons.flipY());
-    // flipYButton.setAttribute('data-panzoom-action', 'flipY');
-    const resetButton = document.createElement('button');
-    resetButton.className = 'reset';
-    resetButton.appendChild(icons.reset());
-    // resetButton.setAttribute('data-panzoom-action', 'reset');
 
-    controlElement.append(toggle1to1Button, rotateCCWButton, rotateCWButton, flipXButton, flipYButton, resetButton);
-    return controlElement;
+    const rotateCWButton = createButton(
+        'rotate-cw', '', 'Rotate clockwise'
+    );
+    rotateCWButton.appendChild(icons.rotateCW());
+
+    const flipXButton = createButton(
+        'flip-x', '', 'Flip horizontally'
+    );
+    flipXButton.appendChild(icons.flipX());
+
+    const flipYButton = createButton(
+        'flip-y', '', 'Flip vertically'
+    );
+    flipYButton.appendChild(icons.flipY());
+
+    const resetButton = createButton(
+        'reset', '', 'Reset image orientation, zoom and position'
+    );
+    resetButton.appendChild(icons.reset());
+
+    const compareAButton = createButton(
+        'compare-a', 'A', 'Select or deselect as comparison image A'
+    );
+
+    const compareBButton = createButton(
+        'compare-b', 'B', 'Select or deselect as comparison image B'
+    );
+
+    const removeButton = createButton(
+        'remove-image', '×', 'Remove image'
+    );
+
+    controls.append(
+        zoom1to1Button,
+        rotateCCWButton,
+        rotateCWButton,
+        flipXButton,
+        flipYButton,
+        resetButton,
+        compareAButton,
+        compareBButton,
+        removeButton
+    );
+
+    return {
+        controls,
+        zoom1to1Button,
+        rotateCCWButton,
+        rotateCWButton,
+        flipXButton,
+        flipYButton,
+        resetButton,
+        compareAButton,
+        compareBButton,
+        removeButton
+    };
 }
 
-/*
-// const height = imageElement.naturalHeight;
-            // let { x: imageX, y: imageY, height: imageHeight, width: imageWidth } = imageElement.getBoundingClientRect();
-            const panzoomImage = Panzoom(imageElement, {
-                maxScale: 4,
-                minScale: 1,
-                step: 0.2,
-                // origin: '0 0',
-                // startY: (containerHeight / 2) - (imageHeight / 2),
-                contain: 'outside',
-                // contain: 'inside',
-//                 setTransform: (elem, { scale, x, y }) => {
-//                     ({ x: containerX, y: containerY, height: containerHeight, width: containerWidth } = imageContainerElement.getBoundingClientRect());
-//                     ({ x: imageX, y: imageY, height: imageHeight, width: imageWidth } = imageElement.getBoundingClientRect());
-//                     // if (imageX === x && imageY === y) return;
-//                     // if (imageX > containerX) return;
-//                     // console.log('setTransform=============================');
-//                     // console.log({ containerX, containerY, containerHeight, containerWidth });
-//                     // console.log({ imageX, imageY, imageHeight, imageWidth });
-//                     console.log({ scale, x, y });
-//                     // console.log(panzoomImage.getPan());
-// 
-//                     // console.log(imageContainerElement.getBoundingClientRect().x, imageContainerElement.getBoundingClientRect().y);
-//                     // console.log(imageElement.getBoundingClientRect().x, imageElement.getBoundingClientRect().y);
-//                     // console.log({ prevX, prevY });
-//                     console.log(imageElement.clientHeight);
-//                     console.log(imageElement.getBoundingClientRect().height);
-//                     console.log(imageElement.naturalHeight);
-//                     let newX = x;
-//                     let newY = y;
-//                     // x = newX;
-//                     // if (x * 2 + imageWidth > containerWidth) newX = prevX;
-//                     // if (imageX < containerX) newX = containerX;
-//                     // if (x < imageWidth -  containerWidth) {
-//                     //     return panzoomImage.setStyle('transform', `scale(${scale}) translate(${prevX}px, ${y}px)`);
-//                     // }
-//                     // if (imageX + imageWidth >= containerWidth) console.log('>');
-//                     // if (imageX < containerX) newX = containerX;
-//                     // console.log({ newX });
-//                     // panzoomImage.pan(newX, newY)
-//                     panzoomImage.setStyle('transform', `scale(${scale}) translate(${x}px, ${y}px)`);
-//                     // imageContainerElement.style.height = `${imageElement.getBoundingClientRect().height}px`
-//                     //                     // prevX = x;
-//                     //                     // prevY = y;
-//                     //                     // panzoomImage.setStyle('width', `calc(100% * ${scale})`);
-//                     //                     // panzoomImage.setStyle('height', `calc(100% * ${scale})`);
-//                 }
-            });
-            //             imageElement.addEventListener('panzoomchange', (event) => {
-            //                 panzoomImage.setOptions({ cursor: 'default' })
-            //                 console.log('panzoomchange=============================');
-            //                 // console.log(event.detail.originalEvent) // => { x: 0, y: 0, scale: 1 }
-            //                 const { movementX, movementY } = event.detail.originalEvent || {};
-            //                 const { x: containerX, y: containerY, height: containerHeight, width: containerWidth } = imageContainerElement.getBoundingClientRect();
-            //                 const { x: imageX, y: imageY, height: imageHeight, width: imageWidth } = imageElement.getBoundingClientRect();
-            //                 console.log({ containerX, containerY, containerHeight, containerWidth });
-            //                 console.log({ imageX, imageY, imageHeight, imageWidth });
-            //                 console.log({ movementX, movementY });
-            // 
-            //                 let newX = imageX - containerX + movementX || 0;
-            //                 let newY = imageY - ((containerHeight / 2) - (imageHeight / 2)) + movementY || 0;
-            //                 // console.log({ newX, newY }, event.detail.x, event.detail.y);
-            //                 console.log(event.detail.x, event.detail.y);
-            //                 if (event.detail.x > containerX && movementX === 1) panzoomImage.setOptions({ disableXAxis: true });
-            //                 // if (imageX < containerX) newX = containerX;
-            //                 panzoomImage.setStyle('transform', `scale(${event.detail.scale}) translate(${event.detail.x}px, ${event.detail.y}px)`);
-            //                 // panzoomImage.setStyle('transform', `scale(${event.detail.scale}) translate(${newX}px, ${newY}px)`);
-            //                 // panzoomImage.pan(event.detail.x, event.detail.y);
-            //             })
-            imageElement.parentElement.addEventListener('wheel', panzoomImage.zoomWithWheel);
-            // Panzoom(imageContainerElement, {
-            //     mouseMoveFactor: 0.1,
-            //     // bounds: false
-            // }).init();
-            // const instance = panzoom(imageElement, {
-            //     smoothScroll: false,
-            //     bounds: true,
-            //     boundsPadding: 0.6,
-            //     maxZoom: 4,
-            //     minZoom: 1
-            // });
-*/
+function createImageElement(src, name, revokeOnRemove = false) {
+    const id = ++nextImageId;
+
+    const {
+        controls,
+        zoom1to1Button,
+        rotateCCWButton,
+        rotateCWButton,
+        flipXButton,
+        flipYButton,
+        resetButton,
+        compareAButton,
+        compareBButton,
+        removeButton
+    } = createControlElement();
+
+    const container = document.createElement('div');
+    container.className = 'image-container f-panzoom';
+
+    const image = document.createElement('img');
+    image.draggable = false;
+    image.alt = name;
+    image.className = 'f-panzoom__content';
+
+    container.append(controls, image);
+    imagesContainer.appendChild(container);
+
+    const item = {
+        id,
+        name,
+        src,
+        container,
+        image,
+        zoompan: null,
+        revokeOnRemove,
+        compareAButton,
+        compareBButton
+    };
+
+    imageItems.set(id, item);
+
+    image.addEventListener('load', () => {
+        if (!imageItems.has(id)) return;
+
+        item.zoompan = addZoomPan({ container, image });
+    }, { once: true });
+
+    image.addEventListener('error', () => {
+        container.classList.add('image-load-error');
+        console.error(`Unable to load image: ${name}`, src);
+    }, { once: true });
+
+    zoom1to1Button.addEventListener('click', () => item.zoompan?.zoom1to1());
+    rotateCCWButton.addEventListener('click', () => item.zoompan?.rotateCCW());
+    rotateCWButton.addEventListener('click', () => item.zoompan?.rotateCW());
+    flipXButton.addEventListener('click', () => item.zoompan?.flip('x'));
+    flipYButton.addEventListener('click', () => item.zoompan?.flip('y'));
+    resetButton.addEventListener('click', () => item.zoompan?.reset());
+
+    compareAButton.addEventListener('click', () => selectForComparison(id, 'A'));
+    compareBButton.addEventListener('click', () => selectForComparison(id, 'B'));
+    removeButton.addEventListener('click', () => removeImage(id));
+
+    // Assign src after registering load/error handlers.
+    image.src = src;
+
+    return item;
+}
+
+// --------------------------------------------------
+// Add images from files, clipboard or URLs
+// --------------------------------------------------
+
+function isImageFile(file) {
+    return Boolean(
+        file &&
+        typeof file.type === 'string' &&
+        file.type.startsWith('image/')
+    );
+}
+
+function appendImage({ files = [], images = [] } = {}) {
+    for (const file of files) {
+        if (!isImageFile(file)) continue;
+
+        const src = URL.createObjectURL(file);
+        createImageElement(src, file.name || 'Uploaded image', true);
+    }
+
+    for (const image of images) {
+        if (!image?.src) continue;
+        createImageElement(image.src, image.alt || 'Pasted image', false);
+    }
+
+    updateCompareControls();
+}
+
+function getImageURL(text) {
+    if (!text) return null;
+
+    const candidate = text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .find(line => line && !line.startsWith('#'));
+
+    if (!candidate) return null;
+
+    try {
+        const url = new URL(candidate);
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+        return url.href;
+    } catch {
+        return null;
+    }
+}
+
+function appendImageFromURL(text) {
+    const url = getImageURL(text);
+    if (!url) return;
+
+    let name = 'Pasted image';
+
+    try {
+        name = decodeURIComponent(new URL(url).pathname.split('/').pop()) || name;
+    } catch {
+        // Keep the fallback name for malformed or encoded paths.
+    }
+
+    createImageElement(url, name, false);
+    updateCompareControls();
+}
+
+// --------------------------------------------------
+// Drag and drop
+// --------------------------------------------------
+
+['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        dropZone.classList.add('dragover');
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    });
+});
+
+['dragleave', 'dragend', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropZone.classList.remove('dragover');
+    });
+});
+
+dropZone.addEventListener('drop', event => {
+    const transfer = event.dataTransfer;
+    if (!transfer) return;
+
+    const files = Array.from(transfer.files || []).filter(isImageFile);
+
+    if (files.length) {
+        appendImage({ files });
+    }
+
+    const uri = transfer.getData('text/uri-list');
+    if (!files.length && uri) appendImageFromURL(uri);
+});
+
+// --------------------------------------------------
+// Clipboard paste
+// --------------------------------------------------
+
+document.addEventListener('paste', event => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    const files = Array.from(items)
+        .filter(isImageFile)
+        .map(item => item.getAsFile())
+        .filter(Boolean);
+
+    if (files.length) appendImage({ files });
+
+    const text = event.clipboardData?.getData('text/plain');
+    if (!files.length && text) appendImageFromURL(text);
+});
